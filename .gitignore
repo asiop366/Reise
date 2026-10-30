@@ -1,0 +1,15 @@
+# build output
+Reise.exe
+*.exe
+*.pdb
+
+# WebView2 assemblies (Microsoft redistributables, not ours to ship)
+lib/
+
+# local runtime + Chromium profile
+runtime/
+profile/
+
+# logs
+*.log
+deploy.log

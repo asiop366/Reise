@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reise — a quiet editor for your own games</title>
+<meta name="description" content="Reise is a Windows script editor for your own game clients: attach to a running process, edit Lua, run scripts, keep them on disk, and update the runtime in one click.">
+<meta property="og:title" content="Reise">
+<meta property="og:description" content="A quiet editor for your own games. Attach, edit, run, verify.">
+<meta property="og:type" content="website">
+<link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+<style>
+/* ============================================================================
+   tokens — spacing 4 8 12 16 24 32 48 64 · type 10 11 12 14 16 20 28 40
+   radius 2 · one accent (lime) · monochrome hairlines · motion 140ms
+   ========================================================================== */
+:root{
+  --void:#050506; --raise:#0a0a0c; --ink:#f2f2f3; --ink-2:#a3a3a9; --ink-3:#7d7d83;
+  --rule:rgba(255,255,255,.10); --rule-2:rgba(255,255,255,.18);
+  --live:#c2ee6a;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px; --s8:64px;
+  --t1:10px; --t2:11px; --t3:12px; --t4:14px; --t5:16px; --t6:20px; --t7:28px; --t8:40px;
+  --mono:"Cascadia Mono","Consolas",ui-monospace,monospace;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --ease:cubic-bezier(.2,.8,.2,1);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--void);color:var(--ink);font:var(--t4)/1.65 var(--sans);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::selection{background:var(--ink);color:#000}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:1px solid var(--ink);outline-offset:3px}
+img{max-width:100%;display:block}
+.wrap{width:min(1080px,calc(100% - 48px));margin:0 auto}
+
+/* ── top bar ───────────────────────────────────────────────────────────── */
+header{position:sticky;top:0;z-index:20;background:rgba(5,5,6,.86);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--rule)}
+.bar{display:flex;align-items:center;gap:var(--s5);height:56px}
+.mark{display:flex;align-items:center;gap:var(--s2);min-height:28px}
+.mark img{width:16px;height:16px}
+.mark b{font:600 var(--t3)/1 var(--sans);letter-spacing:.3em;text-transform:uppercase}
+nav{margin-left:auto;display:flex;gap:var(--s5)}
+nav a{font:var(--t2)/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
+  padding:var(--s2) 0;transition:color 140ms var(--ease)}
+nav a:hover{color:var(--ink)}
+.ver{font:var(--t1)/1 var(--mono);letter-spacing:.14em;color:var(--ink-3);
+  border:1px solid var(--rule);padding:5px var(--s2);display:flex;align-items:center;gap:6px}
+.ver i{width:4px;height:4px;background:var(--live);border-radius:50%;display:block}
+
+/* ── hero ──────────────────────────────────────────────────────────────── */
+.hero{padding:var(--s8) 0 var(--s7);border-bottom:1px solid var(--rule)}
+.eyebrow{font:var(--t2)/1.6 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3);
+  margin-bottom:var(--s5)}
+h1{margin:0;font:600 clamp(30px,5vw,52px)/1.08 var(--sans);letter-spacing:-.025em;max-width:16ch}
+h1 span{color:var(--ink-3)}
+.lede{margin:var(--s5) 0 0;max-width:56ch;color:var(--ink-2);font-size:var(--t5)}
+.acts{display:flex;flex-wrap:wrap;gap:var(--s3);margin-top:var(--s6)}
+.btn{display:inline-flex;align-items:center;gap:var(--s2);height:40px;padding:0 var(--s5);
+  border:1px solid var(--rule-2);font:var(--t2)/1 var(--mono);letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink-2);transition:color 140ms var(--ease),
+  background 140ms var(--ease),border-color 140ms var(--ease)}
+.btn:hover{color:var(--void);background:var(--ink);border-color:var(--ink)}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--void)}
+.btn.primary:hover{background:#d8d8da;border-color:#d8d8da}
+.facts{display:flex;flex-wrap:wrap;gap:var(--s3) var(--s5);margin-top:var(--s6);
+  font:var(--t2)/1.6 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.facts span{display:flex;align-items:center;gap:6px}
+.facts i{width:3px;height:3px;background:var(--ink-3);border-radius:50%;display:block}
+
+/* ── section shell ─────────────────────────────────────────────────────── */
+section{padding:var(--s7) 0;border-bottom:1px solid var(--rule)}
+.sechead{display:flex;align-items:baseline;gap:var(--s4);margin-bottom:var(--s5)}
+.sechead h2{margin:0;font:500 var(--t2)/1 var(--mono);letter-spacing:.24em;text-transform:uppercase;
+  color:var(--ink-3)}
+.sechead .rule{flex:1;height:1px;background:var(--rule)}
+.sechead .n{font:var(--t1)/1 var(--mono);color:var(--ink-3);letter-spacing:.16em}
+
+/* ── screenshot ────────────────────────────────────────────────────────── */
+.shot{border:1px solid var(--rule-2);background:#08080a}
+.shot img{width:100%;height:auto}
+.shot .cap{display:flex;justify-content:space-between;gap:var(--s4);
+  padding:var(--s2) var(--s3);border-top:1px solid var(--rule);
+  font:var(--t1)/1.6 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+
+/* ── feature list ──────────────────────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--rule);
+  border:1px solid var(--rule)}
+.cell{background:var(--void);padding:var(--s5);display:flex;flex-direction:column;gap:var(--s2)}
+.cell b{font:500 var(--t1)/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3)}
+.cell h3{margin:0;font:600 var(--t5)/1.3 var(--sans);letter-spacing:-.01em}
+.cell p{margin:0;color:var(--ink-2);font-size:var(--t4)}
+
+/* ── code ──────────────────────────────────────────────────────────────── */
+.code{border:1px solid var(--rule-2);background:var(--raise)}
+.code .top{display:flex;justify-content:space-between;padding:var(--s2) var(--s3);
+  border-bottom:1px solid var(--rule);font:var(--t1)/1.6 var(--mono);letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3)}
+.code{min-width:0}
+.code pre{margin:0;padding:var(--s4);overflow-x:auto;max-width:100%;
+  font:var(--t3)/1.8 var(--mono);color:var(--ink-2)}
+.code .k{color:var(--ink)}
+.code .c{color:#7f7f86;font-style:italic}
+.code .s{color:#c9c9ae}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4)}
+
+/* ── scope table ───────────────────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:var(--t4);table-layout:fixed}
+th,td{text-align:left;padding:var(--s3) var(--s2);border-top:1px solid var(--rule);vertical-align:top}
+th{font:500 var(--t2)/1.6 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
+  border-top:0}
+td:first-child{color:var(--ink);width:40%}
+td,th{overflow-wrap:anywhere}
+td:last-child{color:var(--ink-2)}
+.tag{font:var(--t2)/1.2 var(--mono);letter-spacing:.12em;text-transform:uppercase;padding:3px 6px;
+  border:1px solid var(--rule-2);color:var(--ink-3);white-space:nowrap}
+.tag.yes{color:var(--live);border-color:rgba(194,238,106,.4)}
+.tag.no{color:var(--ink-3)}
+
+/* ── roadmap ───────────────────────────────────────────────────────────── */
+.road{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--rule);
+  border:1px solid var(--rule)}
+.road div{background:var(--void);padding:var(--s4) var(--s5);display:flex;gap:var(--s3);
+  align-items:baseline}
+.road i{width:5px;height:5px;border-radius:50%;background:var(--ink-3);flex:0 0 auto;margin-top:6px}
+.road i.done{background:var(--live)}
+.road span{color:var(--ink-2);font-size:var(--t4)}
+.road b{color:var(--ink);font-weight:600}
+
+/* ── footer ────────────────────────────────────────────────────────────── */
+footer{padding:var(--s6) 0 var(--s7);font:var(--t2)/1.9 var(--mono);letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3)}
+footer .row{display:flex;flex-wrap:wrap;gap:var(--s4) var(--s6);align-items:baseline}
+footer a{display:inline-block;padding:var(--s1) 0;min-height:24px}
+footer a:hover{color:var(--ink)}
+footer .sp{flex:1}
+
+@media (max-width:900px){
+  .grid,.two,.road{grid-template-columns:1fr}
+  .hero{padding:var(--s7) 0 var(--s6)}
+  .facts{gap:var(--s3)}
+}
+@media (max-width:620px){
+  nav{display:none}
+  .wrap{width:calc(100% - 32px)}
+  .actswrap{gap:var(--s2)}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <a class="mark" href="#top">
+      <img src="assets/mark.svg" alt="Reise" width="16" height="16">
+      <b>Reise</b>
+    </a>
+    <nav>
+      <a href="#overview">Overview</a>
+      <a href="#anatomy">Anatomy</a>
+      <a href="#build">Build</a>
+      <a href="#scope">Scope</a>
+      <a href="#roadmap">Roadmap</a>
+    </nav>
+    <span class="ver"><i></i>1.0.0</span>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap hero">
+    <div class="eyebrow">Windows · .NET Framework 4.8 · WebView2</div>
+    <h1>A quiet editor for <span>your own</span> game clients.</h1>
+    <p class="lede">
+      Reise attaches to a process you own, gives you a real editor with Lua highlighting and a live
+      console, keeps every script on disk, and updates its own runtime with a hash check. No dashboards,
+      no telemetry, no noise.
+    </p>
+    <div class="acts actswrap">
+      <a class="btn primary" href="https://github.com/asiop366/Reise/releases">Download build</a>
+      <a class="btn" href="https://github.com/asiop366/Reise">Source</a>
+      <a class="btn" href="#anatomy">See it</a>
+    </div>
+    <div class="facts">
+      <span><i></i>single window</span>
+      <span><i></i>multi-account target picker</span>
+      <span><i></i>hash-verified runtime updates</span>
+      <span><i></i>no installer</span>
+    </div>
+  </div>
+
+  <div class="wrap" style="padding:var(--s6) 0 var(--s7)">
+    <div class="shot">
+      <img src="assets/app.png" alt="Reise editor: script list, code pane with Lua highlighting, console dock" width="1440" height="900">
+      <div class="cap"><span>editor · scripts · console</span><span>1440 × 900</span></div>
+    </div>
+  </div>
+
+  <section id="overview">
+    <div class="wrap">
+      <div class="sechead"><h2>What it does</h2><span class="rule"></span><span class="n">01</span></div>
+      <div class="grid">
+        <div class="cell">
+          <b>Target</b>
+          <h3>Attach once, pick any session</h3>
+          <p>Discovery runs through WMI, a Toolhelp snapshot and a local process scan, so it still finds
+             the client when it lives in another window station. Several clients open at once — pick the
+             one you mean from the target chip.</p>
+        </div>
+        <div class="cell">
+          <b>Editor</b>
+          <h3>Lua that reads like Lua</h3>
+          <p>Syntax colouring for keywords, strings, comments and the service globals, a synced line
+             gutter, tab-to-indent, and the file's line count in the tab bar.</p>
+        </div>
+        <div class="cell">
+          <b>Console</b>
+          <h3>Output you can filter</h3>
+          <p>Every action lands in a timestamped list, filterable by ok / warn / err. Empty states tell
+             you the next step instead of showing nothing.</p>
+        </div>
+        <div class="cell">
+          <b>Storage</b>
+          <h3>Scripts stay on disk</h3>
+          <p>Saved as plain <code>.lua</code> next to the executable. Filter the list, open the folder,
+             edit in any other editor whenever you want.</p>
+        </div>
+        <div class="cell">
+          <b>Runtime</b>
+          <h3>Update without reinstalling</h3>
+          <p>Reise compares its local runtime hash with the build server, downloads the new one, verifies
+             SHA-256, replaces the file and restarts it hidden.</p>
+        </div>
+        <div class="cell">
+          <b>Diagnostics</b>
+          <h3>Say why, not just no</h3>
+          <p>A failed attach prints the process counts it could see and which layer returned them, so a
+             visibility problem is never a mystery.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="anatomy">
+    <div class="wrap">
+      <div class="sechead"><h2>Anatomy</h2><span class="rule"></span><span class="n">02</span></div>
+      <div class="two">
+        <div class="code">
+          <div class="top"><span>window</span><span>1 of 1</span></div>
+<pre tabindex=" 0\><span class="c">-- header</span>
+REISE   editor · scripts            target  agent   Attach  Execute  System
+
+<span class="c">-- left</span>
+filter
+  speed.lua                    0 KB
+  fullbright.lua               1 KB
+
+<span class="c">-- centre</span>
+untitled.lua                        lua  utf-8  14 lines
+  1  -- Reise · sandbox session
+  2  <span class="k">local</span> Players = <span class="k">game</span>:GetService(<span class="s">"Players"</span>)
+  3  <span class="k">local</span> player = Players.LocalPlayer
+  …
+<span class="c">-- dock</span>
+console   all  ok  warn  err
+20:50:01  ok    reise ready</pre>
+        </div>
+        <div class="code">
+          <div class="top"><span>keys</span><span>always</span></div>
+<pre tabindex=" 0\>F1                  attach to target
+F5                  execute
+Ctrl S              save script
+Ctrl N              new script
+Ctrl K              command palette
+Esc                 close sheet / menu
+
+<span class="c">// palette</span>
+attach target
+execute script
+save script
+new script
+reveal scripts folder
+diagnose visibility
+check runtime update</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="build">
+    <div class="wrap">
+      <div class="sechead"><h2>Build</h2><span class="rule"></span><span class="n">03</span></div>
+      <div class="two">
+        <div class="code">
+          <div class="top"><span>dependencies</span><span>one time</span></div>
+<pre tabindex=" 0\><span class="c">:: WebView2 assemblies, from nuget.org</span>
+Microsoft.Web.WebView2.Core.dll
+Microsoft.Web.WebView2.WinForms.dll
+WebView2Loader.dll
+
+<span class="c">:: put them in lib\ then</span>
+powershell -ExecutionPolicy Bypass -File build.ps1</pre>
+        </div>
+        <div class="code">
+          <div class="top"><span>run</span><span>after build</span></div>
+<pre tabindex=" 0\><span class="c">:: compiled with the in-box compiler</span>
+C:\Windows\Microsoft.NET\Framework64
+  \v4.0.30319\csc.exe
+  /target:winexe /platform:x64
+
+<span class="c">:: output</span>
+Reise.exe        47 KB
+ui\              the interface
+scripts\         your .lua files</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="scope">
+    <div class="wrap">
+      <div class="sechead"><h2>Scope</h2><span class="rule"></span><span class="n">04</span></div>
+      <table>
+        <thead><tr><th>Capability</th><th>Status</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td>Native window, own icon, dark interface</td><td><span class="tag yes">works</span></td>
+              <td>WebView2 host, no browser chrome</td></tr>
+          <tr><td>Attach to a running process</td><td><span class="tag yes">works</span></td>
+              <td>WMI → snapshot → local scan, deduped</td></tr>
+          <tr><td>Multi-account target picker</td><td><span class="tag yes">works</span></td>
+              <td>pid, executable, game id per row</td></tr>
+          <tr><td>Editor, console, script storage</td><td><span class="tag yes">works</span></td>
+              <td>plain files in <code>scripts\</code></td></tr>
+          <tr><td>Runtime update with hash check</td><td><span class="tag yes">works</span></td>
+              <td>SHA-256 compared before replacing</td></tr>
+          <tr><td>Executing Luau inside Roblox</td><td><span class="tag no">not implemented</span></td>
+              <td>Hyperion blocks external injection and re-validates code pages every build; Reise says
+                  so instead of faking a success</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <div class="wrap">
+      <div class="sechead"><h2>Roadmap</h2><span class="rule"></span><span class="n">05</span></div>
+      <div class="road">
+        <div><i class="done"></i><span><b>done</b> — attach, picker, editor, console, storage, updater, diagnose</span></div>
+        <div><i></i><span><b>next</b> — status strip (line:col, selection), inline Lua diagnostics</span></div>
+        <div><i></i><span><b>next</b> — script tabs, per-file run history</span></div>
+        <div><i></i><span><b>later</b> — signed builds, portable profile export</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="row">
+        <a href="https://github.com/asiop366/Reise">github.com/asiop366/Reise</a>
+        <span>MIT</span>
+        <span class="sp"></span>
+        <span>built with the in-box C# compiler</span>
+      </div>
+    </div>
+  </footer>
+</main>
+</body>
+</html>
