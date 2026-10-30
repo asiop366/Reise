@@ -13,3 +13,8 @@ profile/
 # logs
 *.log
 deploy.log
+
+# staging helpers
+stage.py
+fix_pages*.py
+scripts/last_run.lua
